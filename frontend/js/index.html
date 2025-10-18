@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>X‑Wallet by RiskXLabs — Web v1.2</title>
+<link rel="stylesheet" href="css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script type="module">
+  import { ethers } from 'https://esm.sh/ethers@6.13.2';
+  window.ethers = ethers;
+</script>
+<script type="module">
+  import { Client } from 'https://esm.sh/@xmtp/xmtp-js@11.5.0';
+  window.XMTP = { Client };
+</script>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <div class="brand"><span class="x">X</span> X‑Wallet <span class="small">by RiskXLabs</span></div>
+      <div class="cta">
+        <button class="btn ghost" id="ctaLearn">Learn more</button>
+        <button class="btn primary" id="ctaApp">Open App</button>
+      </div>
+    </div>
+
+    <section class="hero">
+      <div>
+        <h1>SafeSend™ risk checks. E2EE messaging. Live markets. On‑chain sends (Sepolia).</h1>
+        <p class="lead">Create or import a wallet, unlock with a password, message via XMTP, and send ETH on Sepolia with SafeSend pre‑checks.</p>
+        <div class="flex"><span class="badge">Sepolia testnet ready</span><span class="badge">XMTP chat</span><span class="badge">SafeSend checks</span></div>
+      </div>
+      <div class="card">
+        <div class="label">Market glance (live)</div>
+        <div class="grid-2">
+          <div class="card chart-card"><header><b>BTC</b></header><div class="chart-wrap" style="height:120px"><canvas id="mk_btc"></canvas></div></div>
+          <div class="card chart-card"><header><b>ETH</b></header><div class="chart-wrap" style="height:120px"><canvas id="mk_eth"></canvas></div></div>
+          <div class="card chart-card"><header><b>SOL</b></header><div class="chart-wrap" style="height:120px"><canvas id="mk_sol"></canvas></div></div>
+          <div class="card chart-card"><header><b>MATIC</b></header><div class="chart-wrap" style="height:120px"><canvas id="mk_matic"></canvas></div></div>
+          <div class="card chart-card"><header><b>USDC</b></header><div class="chart-wrap" style="height:120px"><canvas id="mk_usdc"></canvas></div></div>
+        </div>
+        <div class="small">Data via CoinGecko (client-side). For production, proxy via backend.</div>
+      </div>
+    </section>
+
+    <section class="app">
+      <div class="section-title">X‑Wallet (Web)</div>
+      <div class="app-grid">
+        <div class="card sidebar">
+          <div class="label">Navigation</div>
+          <div class="item active" data-view="dashboard">Dashboard</div>
+          <div class="item" data-view="wallets">Wallets</div>
+          <div class="item" data-view="send">Send</div>
+          <div class="item" data-view="messaging">Messaging</div>
+          <div class="item" data-view="markets">Markets</div>
+          <div class="item" data-view="settings">Settings</div>
+          <hr class="sep"/>
+          <div class="flex"><div id="lockState" class="badge">Locked</div><button class="btn" id="btnLock">Lock</button><button class="btn" id="btnUnlock">Unlock</button></div>
+        </div>
+        <div class="card" id="view"></div>
+      </div>
+    </section>
+
+    <footer class="footer">© RiskXLabs — X‑Wallet Web v1.2</footer>
+  </div>
+
+  <!-- Lock modal -->
+  <div class="lock" id="lockModal">
+    <div class="panel">
+      <div class="label">Unlock your wallet</div>
+      <div class="small">Your secret phrase is encrypted locally. Enter your password to unlock.</div>
+      <div style="height:8px"></div>
+      <input id="unlockPassword" type="password" placeholder="Password"/>
+      <div style="height:8px"></div>
+      <div class="flex"><button class="btn" id="doUnlock">Unlock</button><button class="btn ghost" id="cancelUnlock">Cancel</button></div>
+      <div class="small" id="unlockMsg"></div>
+    </div>
+  </div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
