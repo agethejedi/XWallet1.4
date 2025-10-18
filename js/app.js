@@ -1,5 +1,5 @@
 // =========================================
-// X-Wallet v1.3 — Control Center + Recent TXs (Alchemy transfers)
+// X-Wallet v1.4 — SafeSend UX + Control Center + Alchemy Transfers
 // =========================================
 import { ethers } from "https://esm.sh/ethers@6.13.2";
 
@@ -13,8 +13,11 @@ const RPCS = {
   sep: "https://eth-sepolia.g.alchemy.com/v2/kxHg5y9yBXWAb9cOcJsf0", // <-- your real URL
 };
 
-// Optional SafeSend (pre-check before sending)
+// SafeSend Worker (risk checks)
 const SAFE_SEND_URL = "https://xwalletv1dot2.agedotcom.workers.dev/check";
+
+// Risk-threshold for extra acknowledgement (UI will always show modal)
+const HIGH_RISK_THRESHOLD = 60;
 
 /* ================================
    Tiny helpers
@@ -104,7 +107,7 @@ async function getTxsAlchemy(address, { limit = 10 } = {}) {
     category: ["external"],
     withMetadata: true,
     excludeZeroValue: false,
-    maxCount: "0x" + Math.max(1, Math.min(100, limit)).toString(16), // 1..100
+    maxCount: "0x" + Math.max(1, Math.min(100, limit)).toString(16),
     order: "desc",
   };
 
@@ -120,7 +123,7 @@ async function getTxsAlchemy(address, { limit = 10 } = {}) {
     hash: t.hash,
     from: t.from,
     to: t.to,
-    value: t.value, // numeric string in ETH for external transfers
+    value: t.value, // ETH string for external transfers
     timestamp: t.metadata?.blockTimestamp ? Date.parse(t.metadata.blockTimestamp) : 0
   }));
 
@@ -379,8 +382,9 @@ async function loadAddressTxs(address, targetId){
 }
 
 /* ================================
-   SafeSend (optional) + Send flow
+   SafeSend modal + send flow
 ================================ */
+// Fetch SafeSend score from Worker (gracefully fallback)
 async function fetchSafeSend(address){
   try{
     const u=new URL(SAFE_SEND_URL);
@@ -389,20 +393,106 @@ async function fetchSafeSend(address){
     const r=await fetch(u.toString());
     if(!r.ok) throw new Error("SafeSend backend error");
     return await r.json();
-  }catch(e){console.warn("SafeSend fetch failed",e);return {score:50};}
+  }catch(e){
+    console.warn("SafeSend fetch failed",e);
+    // Fallback minimal object
+    return { score: 0, findings: ["Risk service unavailable — proceeding with caution."] };
+  }
 }
 
+// Map severity text to CSS class
+function factorClass(level){
+  const s = String(level||"").toLowerCase();
+  if (s.includes("high")) return "factor--high";
+  if (s.includes("medium") || s.includes("med")) return "factor--med";
+  return "factor--low";
+}
+
+// Render & show risk modal; return Promise<boolean> (true = proceed)
+function showRiskReview({ score = 0, findings = [] } = {}){
+  const modal   = $("#riskModal");
+  const bar     = $("#riskMeterBar");
+  const scoreEl = $("#riskScoreText");
+  const factors = $("#riskFactors");
+  const warn    = $("#riskWarning");
+  const agree   = $("#riskAgree");
+  const proceed = $("#riskProceed");
+  const cancel  = $("#riskCancel");
+  const close   = $("#riskClose");
+
+  if(!modal || !bar || !scoreEl || !factors || !proceed || !cancel) {
+    console.warn("Risk modal elements missing");
+    return Promise.resolve(false);
+  }
+
+  // Fill meter & score
+  const clamped = Math.max(0, Math.min(100, Number(score)||0));
+  bar.style.setProperty("--score", clamped);
+  scoreEl.textContent = `Risk score: ${clamped}`;
+
+  // Fill findings list
+  const items = Array.isArray(findings) && findings.length ? findings : ["No specific risk factors found."];
+  factors.innerHTML = items.map(raw=>{
+    // allow "High: Some reason", "Medium — text", or plain reason
+    const parts = String(raw).split(/[:–-]\s*/);
+    const level = parts[0].trim();
+    const text  = parts.length>1 ? parts.slice(1).join(" - ") : raw;
+    const klass = factorClass(level);
+    const badge = klass==="factor--high" ? "High" : klass==="factor--med" ? "Medium" : "Low";
+    return `<div class="factor ${klass}"><span class="factor__badge">${badge}</span><div>${text}</div></div>`;
+  }).join("");
+
+  // High-risk acknowledgement
+  const needsAck = clamped >= HIGH_RISK_THRESHOLD;
+  warn.style.display = needsAck ? "block" : "none";
+  if (agree) agree.checked = false;
+  proceed.disabled = needsAck ? true : false;
+
+  const onAgree = () => { if (needsAck) proceed.disabled = !agree.checked; };
+  if (agree) {
+    agree.removeEventListener("change", onAgree);
+    agree.addEventListener("change", onAgree);
+  }
+
+  return new Promise(resolve=>{
+    const onCancel = ()=>{ cleanup(); resolve(false); };
+    const onClose  = ()=>{ cleanup(); resolve(false); };
+    const onProceed= ()=>{ cleanup(); resolve(true); };
+
+    function cleanup(){
+      cancel.removeEventListener("click", onCancel);
+      close?.removeEventListener("click", onClose);
+      proceed.removeEventListener("click", onProceed);
+      modal.classList.remove("active");
+    }
+
+    cancel.addEventListener("click", onCancel, { once:true });
+    close?.addEventListener("click", onClose, { once:true });
+    proceed.addEventListener("click", onProceed, { once:true });
+
+    modal.classList.add("active");
+  });
+}
+
+// Full send flow with mandatory risk review (modal always shown)
 async function sendEthFlow(){
   const to=$("#sendTo").value.trim();
   const amt=$("#sendAmt").value.trim();
-  if(!ethers.isAddress(to)) return alert("Invalid recipient");
+  if(!ethers.isAddress(to)) return alert("Invalid recipient address");
   const n=Number(amt); if(isNaN(n)||n<=0) return alert("Invalid amount");
   const acct=state.accounts[state.signerIndex];
   if(!acct||!state.provider) return alert("Unlock first");
-  $("#sendOut").textContent="Checking SafeSend…";
-  const check=await fetchSafeSend(to);
-  if(check.score>70){$("#sendOut").textContent=`Blocked (score ${check.score})`;return;}
-  $("#sendOut").textContent=`SafeSend OK (${check.score}). Sending…`;
+
+  $("#sendOut").textContent="Fetching risk…";
+  const risk = await fetchSafeSend(to); // { score, findings? }
+
+  const ok = await showRiskReview({
+    score: risk?.score ?? 0,
+    findings: risk?.findings ?? risk?.reasons ?? []
+  });
+  if (!ok) { $("#sendOut").textContent="Send cancelled."; return; }
+
+  $("#sendOut").textContent=`Sending… (SafeSend score ${risk?.score ?? 0})`;
   try{
     const signer=acct.wallet.connect(state.provider);
     const tx={ to, value:ethers.parseEther(String(n)) };
@@ -412,10 +502,11 @@ async function sendEthFlow(){
     const sent=await signer.sendTransaction(tx);
     $("#sendOut").innerHTML=`Broadcasted: <a target=_blank href="https://sepolia.etherscan.io/tx/${sent.hash}">${sent.hash}</a>`;
     await sent.wait(1);
-    // refresh both panels
     loadRecentTxs();                 // your account (Alchemy)
     loadAddressTxs(to, 'rxList');    // recipient (Alchemy)
-  }catch(e){$("#sendOut").textContent="Error: "+(e.message||e);}
+  }catch(e){
+    $("#sendOut").textContent="Error: "+(e.message||e);
+  }
 }
 
 }); // DOMContentLoaded
