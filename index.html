@@ -99,5 +99,43 @@
 
   <!-- App script (ESM) -->
   <script type="module" src="js/app.js"></script>
+  <!-- Risk Review Modal (SafeSend) -->
+<div id="riskModal" class="modal" aria-hidden="true">
+  <div class="modal__panel">
+    <div class="modal__header">
+      <div class="label">SafeSend risk review</div>
+      <button id="riskClose" class="icon-btn" aria-label="Close">✕</button>
+    </div>
+
+    <!-- Meter -->
+    <div class="risk-meter">
+      <div id="riskMeter" class="risk-meter__scale">
+        <div id="riskMeterBar" class="risk-meter__bar" style="--score:0"></div>
+      </div>
+      <div class="risk-meter__labels"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+      <div id="riskScoreText" class="risk-meter__score">Risk score: 0</div>
+    </div>
+
+    <!-- Factors -->
+    <div id="riskFactors" class="risk-factors small">
+      <!-- JS populates rows like:
+      <div class="factor factor--high"><span class="factor__badge">High</span><div>…reason…</div></div>
+      -->
+    </div>
+
+    <!-- High-risk acknowledgement -->
+    <div id="riskWarning" class="risk-warning" style="display:none">
+      This transaction has been identified by SafeSend as one involving substantial risk of being a scam or fraud.
+      The submitter understands that this is an attempt at intervention using the best available information.
+      The submitter assumes full financial responsibility for ignoring the stated risk factors.
+      <label class="checkbox"><input id="riskAgree" type="checkbox"> <span>I agree</span></label>
+    </div>
+
+    <div class="modal__actions">
+      <button id="riskCancel" class="btn ghost">Cancel</button>
+      <button id="riskProceed" class="btn primary" disabled>Complete transaction</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
