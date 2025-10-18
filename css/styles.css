@@ -1,179 +1,97 @@
-/* ---------------------------------------
-   X-Wallet Web — styles.css (v1.4)
-   Dark, clean, lightweight
---------------------------------------- */
-
+/* === Base =========================================================== */
 :root{
-  --bg: #0e0f12;
-  --card: #14161b;
-  --muted: #969fb0;
-  --text: #e9edf5;
-  --line: #242833;
-  --accent: #23b3ff;
-  --accent-2: #00d2a8;
-
-  /* risk colors */
-  --ok:   #39d353;
-  --warn: #f2cc60;
-  --bad:  #ff6961;
+  --bg:#0c1117; --card:#121826; --text:#e6e7ea; --muted:#9aa4b2;
+  --border:#262f40; --accent:#06b6d4; --danger:#ef4444; --warn:#f59e0b; --ok:#10b981;
 }
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+a{color:#7dd3fc;text-decoration:none}a:hover{text-decoration:underline}
+.container{max-width:1100px;margin:0 auto;padding:24px}
 
-*{ box-sizing:border-box; }
-html,body{ height:100%; }
-html{ color-scheme: dark; }
-body{
-  margin:0;
-  font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-  color:var(--text);
-  background:linear-gradient(180deg, #0c0d10 0%, #0e0f12 40%);
+/* nav / hero / cards / sidebar -------------------------------------- */
+.nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.brand{font-weight:700;font-size:18px}.brand .x{color:#22d3ee;margin-right:6px}
+.cta .btn{margin-left:8px}
+.hero .lead{color:var(--muted);max-width:850px}
+.badge{display:inline-block;padding:6px 10px;background:#0b1220;border:1px solid var(--border);border-radius:999px;margin-right:8px;color:var(--muted)}
+
+.section-title{font-weight:700;margin:18px 0 10px}
+.app-grid{display:grid;grid-template-columns:260px 1fr;gap:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.sidebar .item{padding:12px;border-radius:10px;border:1px solid var(--border);margin-bottom:10px;cursor:pointer}
+.sidebar .item.active{background:linear-gradient(90deg,#0d1b2a,#0f2d2f);border-color:#143a40}
+.flex{display:flex;gap:8px;align-items:center}
+.sep{border:none;border-top:1px solid var(--border);margin:12px 0}
+.label{font-weight:700;margin-bottom:6px}
+.small{color:var(--muted);font-size:12px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+
+/* buttons / inputs --------------------------------------------------- */
+.btn{background:#0b1220;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;cursor:pointer}
+.btn:hover{border-color:#334155}
+.btn.primary{background:linear-gradient(90deg,#06b6d4,#22d3ee);color:#041019;border:0;font-weight:700}
+.btn.ghost{background:transparent;border:1px solid var(--border)}
+.icon-btn{background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:6px 8px;cursor:pointer}
+.icon-btn:hover{color:var(--text);border-color:#48556a}
+input,select,textarea{width:100%;background:#0b1220;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{border-bottom:1px solid var(--border);padding:10px 6px;text-align:left}
+
+/* lock modal --------------------------------------------------------- */
+.lock{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;z-index:60}
+.lock.active{display:flex}
+.lock .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:420px;width:100%}
+
+/* === Risk Review modal ============================================= */
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0008;z-index:70}
+.modal.active{display:flex}
+.modal__panel{background:var(--card);border:1px solid var(--border);border-radius:14px;max-width:560px;width:100%;padding:18px}
+.modal__header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.modal__actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+
+/* === FIXED: Risk Meter (visible, animated) ========================= */
+.risk-meter{margin:6px 0 10px}
+.risk-meter__scale{
+  position:relative;
+  height:18px;
+  border-radius:999px;
+  background:#0b1220;              /* solid dark track */
+  border:1px solid var(--border);
+  overflow:hidden;
 }
-
-/* --------- Layout --------- */
-.container{ max-width:1100px; margin:0 auto; padding:24px 16px; }
-
-.nav{
-  display:flex; align-items:center; justify-content:space-between;
-  margin-bottom:18px;
+.risk-meter__bar{
+  position:absolute;
+  left:0;top:0;bottom:0;
+  width:calc(var(--score,0)*1%);
+  background:linear-gradient(90deg,
+    #10b981 0% 60%,
+    #f59e0b 60% 85%,
+    #ef4444 85% 100%);
+  border-radius:999px;
+  box-shadow:0 0 4px #000 inset;
+  transition:width .6s ease;
 }
-.brand{ font-weight:700; letter-spacing:.2px; display:flex; align-items:center; gap:8px; }
-.brand .x{
-  display:inline-grid; place-items:center;
-  width:22px; height:22px; border-radius:6px;
-  background:linear-gradient(135deg, var(--accent), var(--accent-2));
-  color:#000; font-weight:800;
-}
-.brand .small{ color:var(--muted); font-weight:500; margin-left:6px; }
+.risk-meter__labels{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:6px}
+.risk-meter__score{margin-top:6px;font-weight:700}
 
-.cta{ display:flex; gap:8px; }
+/* Factors ------------------------------------------------------------ */
+.risk-factors{display:grid;gap:8px;margin-top:10px}
+.factor{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
+.factor__badge{font-size:12px;padding:4px 8px;border-radius:999px;color:#061416;font-weight:700}
+.factor--low  .factor__badge{background:var(--ok)}
+.factor--med  .factor__badge{background:var(--warn)}
+.factor--high .factor__badge{background:var(--danger)}
 
-.section-title{ font-weight:700; margin:4px 0 10px; color:#cbd3e3; opacity:.9; }
+/* Warning copy ------------------------------------------------------- */
+.risk-warning{border:1px solid #4c1d1d;background:#1b0b0b;border-radius:12px;padding:12px;margin-top:10px;color:#fca5a5}
+.checkbox{display:flex;align-items:center;gap:8px;margin-top:8px}
 
-.hero{ display:flex; gap:18px; margin-bottom:18px; }
-.lead{ color:#b8c0d4; max-width:780px; }
+/* Risk chips on history items --------------------------------------- */
+.chip{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;border:1px solid var(--border);margin-left:6px}
+.chip.low{background:#072d26;color:#6ee7b7;border-color:#0f3d35}
+.chip.med{background:#3a2b08;color:#fde68a;border-color:#6b4d0e}
+.chip.high{background:#3b0a0a;color:#fca5a5;border-color:#7f1d1d}
 
-.flex{ display:flex; align-items:center; gap:8px; }
-.grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-@media (max-width:880px){ .grid-2{ grid-template-columns:1fr; } }
-
-/* --------- Badges / labels --------- */
-.badge{
-  display:inline-flex; align-items:center; gap:6px;
-  background:#1a1e27; color:#c9d3e9;
-  border:1px solid #232838; border-radius:999px;
-  padding:6px 10px; font-size:12px;
-}
-.label{ font-weight:700; color:#d9e2f3; margin-bottom:8px; }
-.small{ color:#9aa4b9; }
-
-/* --------- Buttons --------- */
-.btn{
-  appearance:none; border:1px solid #2a3142; background:#1a1e27; color:#dfe7f7;
-  padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600;
-  transition:background .15s, border-color .15s, transform .02s;
-}
-.btn:hover{ background:#202532; border-color:#374059; }
-.btn:active{ transform:translateY(1px); }
-.btn.primary{
-  background:linear-gradient(135deg, var(--accent), var(--accent-2));
-  color:#001219; border:0;
-}
-.btn.primary:hover{ filter:brightness(1.05); }
-.btn.ghost{
-  background:transparent; border:1px solid #343b4c; color:#cfd7ea;
-}
-
-/* --------- Cards / App grid --------- */
-.card{
-  background:var(--card);
-  border:1px solid var(--line);
-  border-radius:14px;
-  padding:14px;
-  box-shadow:0 10px 24px rgba(0,0,0,.25);
-}
-
-.app .app-grid{
-  display:grid; grid-template-columns:260px 1fr; gap:14px;
-}
-@media (max-width:980px){ .app .app-grid{ grid-template-columns:1fr; } }
-
-/* --------- Sidebar --------- */
-.sidebar .label{ margin-bottom:10px; }
-.sidebar .item{
-  padding:10px 12px; border-radius:10px;
-  margin-bottom:8px; background:#141823; border:1px solid #222838;
-  cursor:pointer; color:#cdd6ea; user-select:none;
-}
-.sidebar .item:hover{ background:#18202c; }
-.sidebar .item.active{
-  background:linear-gradient(120deg, rgba(35,179,255,.22), rgba(0,210,168,.16));
-  border-color:#2c364a;
-}
-
-/* --------- Tables --------- */
-.table{ width:100%; border-collapse:collapse; overflow:hidden; border-radius:10px; }
-.table th,.table td{
-  border-bottom:1px solid #23283a; padding:10px; text-align:left;
-}
-.table thead th{ color:#aeb7cc; font-weight:700; background:#171b25; }
-.table tr:last-child td{ border-bottom:0; }
-.mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-
-/* --------- Inputs --------- */
-input, select, textarea{
-  width:100%; padding:10px 12px; border-radius:10px;
-  border:1px solid #2a3041; outline:none; background:#121420; color:#dfe6fb;
-}
-input::placeholder, textarea::placeholder{ color:#8893a6; }
-textarea{ resize:vertical; min-height:84px; }
-
-/* Send form row */
-.send-form{ display:grid; grid-template-columns:200px 1fr 160px 140px; gap:8px; }
-@media (max-width:880px){ .send-form{ grid-template-columns:1fr; } }
-
-/* Dividers / footer */
-.sep{ border:0; height:1px; background:var(--line); margin:12px 0; }
-.footer{ color:#7f8aa4; margin-top:28px; text-align:center; }
-
-/* --------- Modal (reuses .lock class) --------- */
-.lock{
-  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
-  background:rgba(0,0,0,.6); z-index:60; padding:16px;
-}
-.lock.active{ display:flex; }
-.lock .panel{
-  width:min(640px, 92vw);
-  background:#121521; border:1px solid #2a3142; border-radius:14px;
-  padding:16px;
-  box-shadow:0 14px 36px rgba(0,0,0,.45);
-}
-
-/* ---------------------------------------
-   SafeSend v1.4 — Meter, Factors, Badges
---------------------------------------- */
-.risk-meter{ display:flex; align-items:center; gap:16px; margin-top:8px; }
-.risk-scale{ position:relative; flex:1; height:14px; background:#1f2330; border-radius:8px; overflow:hidden; }
-.risk-bar{ position:absolute; inset:0 auto 0 0; width:0; transition:width .6s ease; background:var(--ok); }
-.risk-ticks{
-  position:absolute; left:0; right:0; top:100%;
-  display:flex; justify-content:space-between; gap:4px;
-  font-size:11px; margin-top:6px; color:#8b94a7;
-}
-.risk-score{ font-weight:800; font-size:22px; min-width:44px; text-align:right; }
-
-/* factor chips */
-.risk-factors{ display:flex; flex-wrap:wrap; gap:6px; }
-.risk-factors .factor{
-  padding:4px 10px; border-radius:999px; background:#212638; border:1px solid #2e3550;
-}
-.risk-factors .factor.ok   { background:#153522; border-color:#1d4a2e; color:var(--ok); }
-.risk-factors .factor.warn { background:#3a2f0f; border-color:#57461a; color:var(--warn); }
-.risk-factors .factor.bad  { background:#3a1616; border-color:#5b2323; color:var(--bad); }
-
-/* badge on history rows */
-.risk-badge{
-  padding:2px 7px; border-radius:6px; background:#23283a; border:1px solid #2e3550;
-  font-size:12px; font-weight:700;
-}
-.risk-badge.ok   { background:#153522; border-color:#1d4a2e; color:var(--ok); }
-.risk-badge.warn { background:#3a2f0f; border-color:#57461a; color:var(--warn); }
-.risk-badge.bad  { background:#3a1616; border-color:#5b2323; color:var(--bad); }
+/* send form ---------------------------------------------------------- */
+.send-form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:center}
+@media (max-width:840px){.app-grid{grid-template-columns:1fr}.send-form{grid-template-columns:1fr}}
