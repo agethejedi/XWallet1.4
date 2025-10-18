@@ -1,0 +1,13 @@
+name = "safesend-worker"
+main = "worker.js"
+compatibility_date = "2024-10-01"
+
+# You can deploy to your own subdomain or a custom domain if you prefer
+# routes = [{ pattern = "https://api.riskxlabs.com/*", zone_name = "riskxlabs.com" }]
+
+[vars]
+# Optional non-secret variables go here
+
+# Secrets (you’ll add via CLI):
+# ETHERSCAN_API_KEY
+# COINGECKO_API_KEY
