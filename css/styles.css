@@ -95,3 +95,4 @@ input,select,textarea{width:100%;background:#0b1220;border:1px solid var(--borde
 /* send form ---------------------------------------------------------- */
 .send-form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:center}
 @media (max-width:840px){.app-grid{grid-template-columns:1fr}.send-form{grid-template-columns:1fr}}
+
