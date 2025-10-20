@@ -1,5 +1,5 @@
 // =========================================
-// X-Wallet v1.4 — SafeSend UX + Control Center + Alchemy Transfers
+// X-Wallet v1.4 — Control Center + TXs + SafeSend Worker-only risk
 // =========================================
 import { ethers } from "https://esm.sh/ethers@6.13.2";
 
@@ -8,25 +8,23 @@ document.addEventListener("DOMContentLoaded", () => {
 /* ================================
    CONFIG
 ================================ */
-// Your Alchemy Sepolia RPC (balances, sends, history)
+// Alchemy Sepolia (balances, send, history)
 const RPCS = {
-  sep: "https://eth-sepolia.g.alchemy.com/v2/kxHg5y9yBXWAb9cOcJsf0", // <-- your real URL
+  sep: "https://eth-sepolia.g.alchemy.com/v2/REPLACE_WITH_YOUR_KEY",
 };
 
-// SafeSend Worker (risk checks)
-const SAFE_SEND_URL = "https://xwalletv1dot2.agedotcom.workers.dev/check";
-
-// Risk-threshold for extra acknowledgement (UI will always show modal)
-const HIGH_RISK_THRESHOLD = 60;
+// SafeSend Worker (risk checks ONLY — no Etherscan)
+const SAFE_SEND_URL = "https://YOUR-WORKER.SUBDOMAIN.workers.dev";
 
 /* ================================
    Tiny helpers
 ================================ */
 const $  = (q) => document.querySelector(q);
 const $$ = (q) => [...document.querySelectorAll(q)];
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
 /* ================================
-   AES-GCM + PBKDF2 vault
+   AES-GCM vault
 ================================ */
 async function aesEncrypt(password, plaintext){
   const enc  = new TextEncoder();
@@ -47,30 +45,27 @@ async function aesDecrypt(password, payload){
 }
 
 /* ================================
-   State / storage / lock
+   State / storage
 ================================ */
 const STORAGE_KEY_VAULT = "xwallet_vault_v13";
 const STORAGE_KEY_ACCTS = "xwallet_accounts_n";
-
 const state = {
   unlocked:false,
   provider:null,
   decryptedPhrase:null,
-  accounts:[],     // [{ index, wallet, address }]
-  signerIndex:0,   // which derived wallet to send from
+  accounts:[], // [{ index, wallet, address }]
+  signerIndex:0
 };
-
-function getVault(){ const s = localStorage.getItem(STORAGE_KEY_VAULT); return s ? JSON.parse(s) : null; }
-function setVault(v){ localStorage.setItem(STORAGE_KEY_VAULT, JSON.stringify(v)); }
-function getAccountCount(){ const n = Number(localStorage.getItem(STORAGE_KEY_ACCTS)||"0"); return Number.isFinite(n)&&n>0?n:0; }
-function setAccountCount(n){ localStorage.setItem(STORAGE_KEY_ACCTS, String(Math.max(0, n))); }
+const getVault = () => (localStorage.getItem(STORAGE_KEY_VAULT) ? JSON.parse(localStorage.getItem(STORAGE_KEY_VAULT)) : null);
+const setVault = (v) => localStorage.setItem(STORAGE_KEY_VAULT, JSON.stringify(v));
+const getAccountCount = () => {
+  const n = Number(localStorage.getItem(STORAGE_KEY_ACCTS)||"0");
+  return Number.isFinite(n)&&n>0?n:0;
+};
+const setAccountCount = (n) => localStorage.setItem(STORAGE_KEY_ACCTS, String(Math.max(0, n)));
 
 function lock(){
-  state.unlocked=false;
-  state.provider=null;
-  state.decryptedPhrase=null;
-  state.accounts=[];
-  state.signerIndex=0;
+  state.unlocked=false; state.provider=null; state.decryptedPhrase=null; state.accounts=[]; state.signerIndex=0;
   const ls = document.getElementById("lockState"); if (ls) ls.textContent = "Locked";
 }
 function scheduleAutoLock(){
@@ -100,7 +95,6 @@ function loadAccountsFromPhrase(phrase){
 async function getTxsAlchemy(address, { limit = 10 } = {}) {
   if (!state.provider) throw new Error("Provider not ready");
   if (!ethers.isAddress(address)) return [];
-
   const base = {
     fromBlock: "0x0",
     toBlock: "latest",
@@ -110,24 +104,24 @@ async function getTxsAlchemy(address, { limit = 10 } = {}) {
     maxCount: "0x" + Math.max(1, Math.min(100, limit)).toString(16),
     order: "desc",
   };
-
   const [outRes, inRes] = await Promise.all([
     state.provider.send("alchemy_getAssetTransfers", [{ ...base, fromAddress: address }]).catch(() => ({ transfers: [] })),
     state.provider.send("alchemy_getAssetTransfers", [{ ...base, toAddress: address }]).catch(() => ({ transfers: [] }))
   ]);
 
-  const out = outRes?.transfers || [];
-  const inn = inRes?.transfers || [];
+  const norm = (t) => {
+    const ts = t?.metadata?.blockTimestamp ? Date.parse(t.metadata.blockTimestamp) : 0;
+    return {
+      hash: t?.hash || "",
+      from: t?.from || "",
+      to: t?.to || "",
+      value: t?.value != null ? Number(t.value) : null,
+      timestamp: Number.isFinite(ts) ? ts : 0
+    };
+  };
 
-  const all = [...out, ...inn].map(t => ({
-    hash: t.hash,
-    from: t.from,
-    to: t.to,
-    value: t.value, // ETH string for external transfers
-    timestamp: t.metadata?.blockTimestamp ? Date.parse(t.metadata.blockTimestamp) : 0
-  }));
-
-  all.sort((a, b) => b.timestamp - a.timestamp);
+  const all = [...(outRes?.transfers||[]), ...(inRes?.transfers||[])].map(norm);
+  all.sort((a,b)=>b.timestamp-a.timestamp);
   return all.slice(0, limit);
 }
 
@@ -221,73 +215,45 @@ function render(view){
   if(!VIEWS[view]){root.innerHTML="<div>Not found</div>";return;}
   root.innerHTML=VIEWS[view]();
 
-  // ---- dashboard handlers ----
   if(view==="dashboard"){
-    $("#gen")?.addEventListener("click",()=>{
-      $("#mnemonic").value=ethers.Mnemonic.fromEntropy(ethers.randomBytes(16)).phrase;
-    });
+    $("#gen")?.addEventListener("click",()=>{$("#mnemonic").value=ethers.Mnemonic.fromEntropy(ethers.randomBytes(16)).phrase;});
     $("#save")?.addEventListener("click",async()=>{
-      const m=$("#mnemonic").value.trim();
-      const pw=$("#password").value;
+      const m=$("#mnemonic").value.trim(); const pw=$("#password").value;
       if(!m||!pw) return alert("Mnemonic + password required");
-      const enc=await aesEncrypt(pw,m);
-      setVault({version:1,enc});
-      setAccountCount(1);
-      alert("Vault saved. Click Unlock.");
-      render("dashboard");
+      const enc=await aesEncrypt(pw,m); setVault({version:1,enc}); setAccountCount(1);
+      alert("Vault saved. Click Unlock."); render("dashboard");
     });
     $("#doImport")?.addEventListener("click",async()=>{
-      const m=$("#mnemonicIn").value.trim();
-      const pw=$("#passwordIn").value;
+      const m=$("#mnemonicIn").value.trim(); const pw=$("#passwordIn").value;
       if(!m||!pw) return alert("Mnemonic + password required");
-      const enc=await aesEncrypt(pw,m);
-      setVault({version:1,enc});
-      setAccountCount(1);
-      alert("Imported. Click Unlock.");
-      render("dashboard");
+      const enc=await aesEncrypt(pw,m); setVault({version:1,enc}); setAccountCount(1);
+      alert("Imported. Click Unlock."); render("dashboard");
     });
     $("#addAcct")?.addEventListener("click",()=>{
       if(!state.unlocked) return alert("Unlock first");
-      const n=getAccountCount()+1;
-      setAccountCount(n);
+      const n=getAccountCount()+1; setAccountCount(n);
       const w=deriveAccountFromPhrase(state.decryptedPhrase,n-1);
       state.accounts.push({index:n-1,wallet:w,address:w.address});
       render("dashboard");
     });
   }
 
-  // ---- wallets ----
   if(view==="wallets"){loadWalletBalances();}
 
-  // ---- send ----
   if(view==="send"){
-    $("#fromAccount")?.addEventListener("change",(e)=>{
-      state.signerIndex=Number(e.target.value);
-      loadRecentTxs();  // update "your" recent txs when switching wallet
-    });
-
+    $("#fromAccount")?.addEventListener("change",(e)=>{ state.signerIndex=Number(e.target.value); loadRecentTxs(); });
     $("#doSend")?.addEventListener("click",sendEthFlow);
 
-    // Live recipient txs as the user types a valid address
-    const toEl = $("#sendTo");
+    const toEl=$("#sendTo");
     const updateRx = () => loadAddressTxs(toEl.value.trim(), 'rxList');
-    toEl?.addEventListener('input', () => {
-      if (ethers.isAddress(toEl.value.trim())) updateRx();
-    });
+    toEl?.addEventListener('input', ()=>{ if(ethers.isAddress(toEl.value.trim())) updateRx();});
     toEl?.addEventListener('blur', updateRx);
 
-    // initial loads
-    loadRecentTxs(); // your account (Alchemy)
-    updateRx();      // recipient if prefilled (Alchemy)
+    loadRecentTxs(); updateRx();
   }
 
-  // ---- settings ----
   if(view==="settings"){
-    $("#wipe")?.addEventListener("click",()=>{
-      if(confirm("Delete vault?")){
-        localStorage.clear();lock();alert("Deleted. Reload.");
-      }
-    });
+    $("#wipe")?.addEventListener("click",()=>{ if(confirm("Delete vault?")){ localStorage.clear(); lock(); alert("Deleted. Reload."); } });
   }
 }
 
@@ -313,14 +279,13 @@ $("#doUnlock")?.addEventListener("click",async()=>{
     loadAccountsFromPhrase(phrase);
     state.provider=new ethers.JsonRpcProvider(RPCS.sep);
     state.unlocked=true;
-    const ls = document.getElementById("lockState"); if (ls) ls.textContent = "Unlocked";
-    hideLock();scheduleAutoLock();
-    selectItem("dashboard");
-  }catch(e){console.error(e);$("#unlockMsg").textContent="Wrong password or corrupted vault.";}
+    const ls=document.getElementById("lockState"); if(ls) ls.textContent="Unlocked";
+    hideLock(); scheduleAutoLock(); selectItem("dashboard");
+  }catch(e){console.error(e); $("#unlockMsg").textContent="Wrong password or corrupted vault.";}
 });
 
 /* ================================
-   Wallet + TX helpers
+   Balances & History
 ================================ */
 async function loadWalletBalances(){
   if(!state.unlocked||!state.provider) return;
@@ -329,184 +294,165 @@ async function loadWalletBalances(){
     try{
       const b=await state.provider.getBalance(a.address);
       total+=b;
-      const cell = document.getElementById(`bal-${a.index}`);
-      if (cell) cell.textContent = ethers.formatEther(b);
+      const cell=document.getElementById(`bal-${a.index}`);
+      if(cell) cell.textContent=ethers.formatEther(b);
     }catch{}
   }
-  const tb = document.getElementById("totalBal");
-  if (tb) tb.textContent = "Total (ETH): " + ethers.formatEther(total);
+  const tb=document.getElementById("totalBal");
+  if(tb) tb.textContent="Total (ETH): "+ethers.formatEther(total);
 }
 
 async function loadRecentTxs(){
   const el=$("#txList"); if(!el) return;
   el.textContent="Loading…";
   try{
-    const acct=state.accounts[state.signerIndex];
-    if(!acct){el.textContent="No wallet selected.";return;}
-    const txs = await getTxsAlchemy(acct.address, { limit: 10 });
-    if (!txs.length) { el.textContent = "No recent txs."; return; }
+    const acct=state.accounts[state.signerIndex]; if(!acct){ el.textContent="No wallet selected."; return; }
+    const txs=await getTxsAlchemy(acct.address,{limit:10});
+    if(!txs.length){ el.textContent="No recent txs."; return; }
     el.innerHTML=txs.map(t=>{
       const when=t.timestamp?new Date(t.timestamp).toLocaleString():"";
       return `<div>
         <a target=_blank href="https://sepolia.etherscan.io/tx/${t.hash}">${t.hash.slice(0,10)}…</a>
-        • ${when}
-        • ${t.from?.slice(0,6)}… → ${t.to?.slice(0,6)}…
-        ${t.value != null ? `• ${t.value} ETH` : ""}
+        • ${when} • ${t.from?.slice(0,6)}… → ${t.to?.slice(0,6)}… ${t.value!=null?`• ${t.value} ETH`:""}
       </div>`;
     }).join("");
-  }catch(e){console.warn(e);el.textContent="Could not load recent transactions.";}
+  }catch(e){ console.warn(e); el.textContent="Could not load recent transactions."; }
 }
 
-// Recipient panel
 async function loadAddressTxs(address, targetId){
-  const el = document.getElementById(targetId);
-  if (!el) return;
-  if (!address || !ethers.isAddress(address)) { el.textContent = "Enter a valid 0x address."; return; }
-  el.textContent = "Loading…";
-  try {
-    const txs = await getTxsAlchemy(address, { limit: 10 });
-    if (!txs.length) { el.textContent = "No recent txs."; return; }
-    el.innerHTML = txs.map(t=>{
-      const when = t.timestamp ? new Date(t.timestamp).toLocaleString() : "";
+  const el=document.getElementById(targetId); if(!el) return;
+  if(!address || !ethers.isAddress(address)){ el.textContent="Enter a valid 0x address."; return; }
+  el.textContent="Loading…";
+  try{
+    const txs=await getTxsAlchemy(address,{limit:10});
+    if(!txs.length){ el.textContent="No recent txs."; return; }
+    el.innerHTML=txs.map(t=>{
+      const when=t.timestamp?new Date(t.timestamp).toLocaleString():"";
       return `<div>
         <a target=_blank href="https://sepolia.etherscan.io/tx/${t.hash}">${t.hash.slice(0,10)}…</a>
-        • ${when}
-        • ${t.from?.slice(0,6)}… → ${t.to?.slice(0,6)}…
-        ${t.value != null ? `• ${t.value} ETH` : ""}
+        • ${when} • ${t.from?.slice(0,6)}… → ${t.to?.slice(0,6)}… ${t.value!=null?`• ${t.value} ETH`:""}
       </div>`;
-    }).join('');
-  } catch (e) {
-    console.warn(e);
-    el.textContent = "Could not load transactions for this address.";
+    }).join("");
+  }catch(e){ console.warn(e); el.textContent="Could not load transactions for this address."; }
+}
+
+/* ================================
+   SafeSend Worker (ONLY) + modal
+================================ */
+async function fetchSafeSendWorker(addr){
+  try{
+    const u=new URL(SAFE_SEND_URL + "/check");
+    u.searchParams.set("address", addr);
+    u.searchParams.set("chain", "sepolia");
+    const r=await fetch(u.toString(), { cache: "no-store" });
+    if(!r.ok) throw new Error("safesend_http_" + r.status);
+    return await r.json(); // { score, decision, factors }
+  }catch(e){
+    console.warn("SafeSend fetch failed", e);
+    // Return a benign result so UI still works but WITHOUT any Etherscan text
+    return { score: 10, decision: "allow", factors: [{severity:"low",label:"Risk service unavailable",reason:"Using default low risk."}] };
+  }
+}
+
+function severityClass(s){
+  if(s==="high") return "factor--high";
+  if(s==="medium") return "factor--medium";
+  return "factor--low";
+}
+
+function openRiskModal({score, factors}, onCancel, onProceed){
+  const modal = document.getElementById("riskModal");
+  const bar   = document.getElementById("riskMeterBar");
+  const scoreEl = document.getElementById("riskScoreText");
+  const list  = document.getElementById("riskFactors");
+  const warn  = document.getElementById("riskWarning");
+  const agree = document.getElementById("riskAgree");
+  const btnCancel  = document.getElementById("riskCancel");
+  const btnProceed = document.getElementById("riskProceed");
+  const btnClose   = document.getElementById("riskClose");
+
+  // reset
+  list.innerHTML = "";
+  agree.checked = false;
+  btnProceed.disabled = true;
+  warn.style.display = (score >= 60) ? "block" : "none";
+
+  // animate meter 0 -> score
+  const target = clamp(Number(score)||0, 0, 100);
+  let cur = 0;
+  bar.style.setProperty("--score", "0");
+  scoreEl.textContent = `Risk score: ${cur}`;
+  modal.classList.add("show");
+
+  const step = () => {
+    cur = Math.min(cur + 2, target);
+    bar.style.setProperty("--score", String(cur));
+    scoreEl.textContent = `Risk score: ${cur}`;
+    if(cur < target) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+
+  // render factors from Worker ONLY
+  (factors || []).forEach(f=>{
+    const row = document.createElement("div");
+    row.className = `factor ${severityClass(f.severity)}`;
+    row.innerHTML = `<span class="factor__badge">${f.label || f.severity}</span><div>${f.reason || ""}</div>`;
+    list.appendChild(row);
+  });
+
+  // wire buttons
+  const off = () => {
+    btnCancel.onclick = btnProceed.onclick = btnClose.onclick = agree.onchange = null;
+    modal.classList.remove("show");
+  };
+
+  btnCancel.onclick = ()=>{ off(); onCancel?.(); };
+  btnClose.onclick  = ()=>{ off(); onCancel?.(); };
+
+  if (score >= 60) {
+    agree.onchange = ()=>{ btnProceed.disabled = !agree.checked; };
+    btnProceed.onclick = ()=>{ if(agree.checked){ off(); onProceed?.(); } };
+  } else {
+    btnProceed.disabled = false;
+    btnProceed.onclick = ()=>{ off(); onProceed?.(); };
   }
 }
 
 /* ================================
-   SafeSend modal + send flow
+   Send flow
 ================================ */
-// Fetch SafeSend score from Worker (gracefully fallback)
-async function fetchSafeSend(address){
-  try{
-    const u=new URL(SAFE_SEND_URL);
-    u.searchParams.set("address",address);
-    u.searchParams.set("chain","sepolia");
-    const r=await fetch(u.toString());
-    if(!r.ok) throw new Error("SafeSend backend error");
-    return await r.json();
-  }catch(e){
-    console.warn("SafeSend fetch failed",e);
-    // Fallback minimal object
-    return { score: 0, findings: ["Risk service unavailable — proceeding with caution."] };
-  }
-}
-
-// Map severity text to CSS class
-function factorClass(level){
-  const s = String(level||"").toLowerCase();
-  if (s.includes("high")) return "factor--high";
-  if (s.includes("medium") || s.includes("med")) return "factor--med";
-  return "factor--low";
-}
-
-// Render & show risk modal; return Promise<boolean> (true = proceed)
-function showRiskReview({ score = 0, findings = [] } = {}){
-  const modal   = $("#riskModal");
-  const bar     = $("#riskMeterBar");
-  const scoreEl = $("#riskScoreText");
-  const factors = $("#riskFactors");
-  const warn    = $("#riskWarning");
-  const agree   = $("#riskAgree");
-  const proceed = $("#riskProceed");
-  const cancel  = $("#riskCancel");
-  const close   = $("#riskClose");
-
-  if(!modal || !bar || !scoreEl || !factors || !proceed || !cancel) {
-    console.warn("Risk modal elements missing");
-    return Promise.resolve(false);
-  }
-
-  // Fill meter & score
-  const clamped = Math.max(0, Math.min(100, Number(score)||0));
-  bar.style.setProperty("--score", clamped);
-  scoreEl.textContent = `Risk score: ${clamped}`;
-
-  // Fill findings list
-  const items = Array.isArray(findings) && findings.length ? findings : ["No specific risk factors found."];
-  factors.innerHTML = items.map(raw=>{
-    // allow "High: Some reason", "Medium — text", or plain reason
-    const parts = String(raw).split(/[:–-]\s*/);
-    const level = parts[0].trim();
-    const text  = parts.length>1 ? parts.slice(1).join(" - ") : raw;
-    const klass = factorClass(level);
-    const badge = klass==="factor--high" ? "High" : klass==="factor--med" ? "Medium" : "Low";
-    return `<div class="factor ${klass}"><span class="factor__badge">${badge}</span><div>${text}</div></div>`;
-  }).join("");
-
-  // High-risk acknowledgement
-  const needsAck = clamped >= HIGH_RISK_THRESHOLD;
-  warn.style.display = needsAck ? "block" : "none";
-  if (agree) agree.checked = false;
-  proceed.disabled = needsAck ? true : false;
-
-  const onAgree = () => { if (needsAck) proceed.disabled = !agree.checked; };
-  if (agree) {
-    agree.removeEventListener("change", onAgree);
-    agree.addEventListener("change", onAgree);
-  }
-
-  return new Promise(resolve=>{
-    const onCancel = ()=>{ cleanup(); resolve(false); };
-    const onClose  = ()=>{ cleanup(); resolve(false); };
-    const onProceed= ()=>{ cleanup(); resolve(true); };
-
-    function cleanup(){
-      cancel.removeEventListener("click", onCancel);
-      close?.removeEventListener("click", onClose);
-      proceed.removeEventListener("click", onProceed);
-      modal.classList.remove("active");
-    }
-
-    cancel.addEventListener("click", onCancel, { once:true });
-    close?.addEventListener("click", onClose, { once:true });
-    proceed.addEventListener("click", onProceed, { once:true });
-
-    modal.classList.add("active");
-  });
-}
-
-// Full send flow with mandatory risk review (modal always shown)
 async function sendEthFlow(){
   const to=$("#sendTo").value.trim();
   const amt=$("#sendAmt").value.trim();
-  if(!ethers.isAddress(to)) return alert("Invalid recipient address");
+  if(!ethers.isAddress(to)) return alert("Invalid recipient");
   const n=Number(amt); if(isNaN(n)||n<=0) return alert("Invalid amount");
   const acct=state.accounts[state.signerIndex];
   if(!acct||!state.provider) return alert("Unlock first");
 
-  $("#sendOut").textContent="Fetching risk…";
-  const risk = await fetchSafeSend(to); // { score, findings? }
+  $("#sendOut").textContent="Checking SafeSend…";
 
-  const ok = await showRiskReview({
-    score: risk?.score ?? 0,
-    findings: risk?.findings ?? risk?.reasons ?? []
-  });
-  if (!ok) { $("#sendOut").textContent="Send cancelled."; return; }
+  // 1) Get risk from Worker (ONLY)
+  const risk = await fetchSafeSendWorker(to);
 
-  $("#sendOut").textContent=`Sending… (SafeSend score ${risk?.score ?? 0})`;
-  try{
-    const signer=acct.wallet.connect(state.provider);
-    const tx={ to, value:ethers.parseEther(String(n)) };
-    const fee=await state.provider.getFeeData();
-    if(fee.maxFeePerGas){ tx.maxFeePerGas=fee.maxFeePerGas; tx.maxPriorityFeePerGas=fee.maxPriorityFeePerGas; }
-    try { tx.gasLimit = await signer.estimateGas(tx); } catch {}
-    const sent=await signer.sendTransaction(tx);
-    $("#sendOut").innerHTML=`Broadcasted: <a target=_blank href="https://sepolia.etherscan.io/tx/${sent.hash}">${sent.hash}</a>`;
-    await sent.wait(1);
-    loadRecentTxs();                 // your account (Alchemy)
-    loadAddressTxs(to, 'rxList');    // recipient (Alchemy)
-  }catch(e){
-    $("#sendOut").textContent="Error: "+(e.message||e);
-  }
+  // 2) Always show modal
+  openRiskModal(
+    { score: risk.score ?? 0, factors: risk.factors ?? [] },
+    () => { $("#sendOut").textContent="Cancelled."; }, // cancel
+    async () => { // proceed
+      $("#sendOut").textContent = `SafeSend OK (${risk.score}). Sending…`;
+      try{
+        const signer=acct.wallet.connect(state.provider);
+        const tx={ to, value:ethers.parseEther(String(n)) };
+        const fee=await state.provider.getFeeData();
+        if(fee?.maxFeePerGas){ tx.maxFeePerGas=fee.maxFeePerGas; tx.maxPriorityFeePerGas=fee.maxPriorityFeePerGas; }
+        try { tx.gasLimit = await signer.estimateGas(tx); } catch {}
+        const sent=await signer.sendTransaction(tx);
+        $("#sendOut").innerHTML=`Broadcasted: <a target=_blank href="https://sepolia.etherscan.io/tx/${sent.hash}">${sent.hash}</a>`;
+        await sent.wait(1);
+        loadRecentTxs(); loadAddressTxs(to,'rxList');
+      }catch(e){ $("#sendOut").textContent="Error: "+(e.message||e); }
+    }
+  );
 }
 
 }); // DOMContentLoaded
