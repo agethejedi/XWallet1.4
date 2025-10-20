@@ -10,11 +10,11 @@ document.addEventListener("DOMContentLoaded", () => {
 ================================ */
 // Alchemy Sepolia (balances, send, history)
 const RPCS = {
-  sep: "https://eth-sepolia.g.alchemy.com/v2/REPLACE_WITH_YOUR_KEY",
+  sep: "https://eth-sepolia.g.alchemy.com/v2/kxHg5y9yBXWAb9cOcJsf0",
 };
 
 // SafeSend Worker (risk checks ONLY — no Etherscan)
-const SAFE_SEND_URL = "https://YOUR-WORKER.SUBDOMAIN.workers.dev";
+const SAFE_SEND_URL = "https://xwalletv1dot2.agedotcom.workers.dev";
 
 /* ================================
    Tiny helpers
