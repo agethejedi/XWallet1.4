@@ -1,182 +1,190 @@
+// worker.js — SafeSend Worker + CoinGecko proxy (demo/pro-safe)
 export default {
-  async fetch(request, env, ctx) {
-    try {
-      const url = new URL(request.url);
-      if (url.pathname !== "/check") return json({ error: "not_found" }, 404);
+  async fetch(req, env) {
+    const url = new URL(req.url);
+    const origin = req.headers.get("Origin") || "";
 
-      const addr = (url.searchParams.get("address") || "").trim();
-      const chain = (url.searchParams.get("chain") || "sepolia").toLowerCase();
-      if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) return json({ error: "bad_address" }, 400);
-      if (chain !== "sepolia") return json({ error: "unsupported_chain" }, 400);
-
-      const ALCHEMY_SEPOLIA_RPC = env.ALCHEMY_SEPOLIA_RPC;
-      if (!ALCHEMY_SEPOLIA_RPC)
-        return json({ error: "missing_ALCHEMY_SEPOLIA_RPC" }, 500);
-
-      const BADLIST_ADDRESSES = (env.BADLIST_ADDRESSES || "")
-        .toLowerCase()
-        .split(",")
-        .map(s => s.trim())
-        .filter(Boolean);
-      const BAD_ENS_NAMES = (env.BAD_ENS_NAMES || "")
-        .toLowerCase()
-        .split(",")
-        .map(s => s.trim())
-        .filter(Boolean);
-      let BAD_ENS_ADDRS = {};
-      try {
-        BAD_ENS_ADDRS = JSON.parse(env.BAD_ENS_ADDRS || "{}");
-      } catch {}
-      const DUST_THRESHOLD_ETH = Number(env.DUST_THRESHOLD_ETH || "0.00002");
-
-      const rpc = (method, params = []) =>
-        fetch(ALCHEMY_SEPOLIA_RPC, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method,
-            params
-          })
-        }).then(async r => {
-          if (!r.ok) throw new Error("rpc_http_" + r.status);
-          const j = await r.json();
-          if (j.error) throw new Error(j.error.message || "rpc_error");
-          return j.result;
-        });
-
-      let score = 0;
-      const findings = [];
-      const addFinding = (label, detail, level, delta) => {
-        findings.push({ label, detail, level });
-        score += delta;
-      };
-
-      // --- Blocklists / negative reputation ---
-      if (BADLIST_ADDRESSES.includes(addr.toLowerCase()))
-        addFinding("Blocklisted", "Address appears on internal blocklist.", "high", 90);
-      if (BAD_ENS_ADDRS[addr.toLowerCase()])
-        addFinding(
-          "Negative ENS link",
-          `Associated with ${BAD_ENS_ADDRS[addr.toLowerCase()]}`,
-          "high",
-          25
-        );
-
-      // --- Contract / bytecode ---
-      let isContract = false;
-      let bytecode = "0x";
-      try {
-        bytecode = await rpc("eth_getCode", [addr, "latest"]);
-        isContract = !!bytecode && bytecode !== "0x";
-        if (isContract) {
-          addFinding("Contract", "Recipient is a contract address.", "medium", 10);
-          if (/363d3d/i.test(bytecode.slice(2)))
-            addFinding("Proxy pattern", "EIP-1167 minimal proxy detected.", "medium", 6);
-          if (bytecode.length < 200)
-            addFinding("Tiny bytecode", "Contract runtime is unusually short.", "medium", 6);
-        } else {
-          addFinding("EOA", "Recipient is an externally owned address.", "low", 0);
-        }
-      } catch {
-        addFinding("Unknown type", "Could not verify contract/EOA.", "low", 0);
-      }
-
-      // --- Transfers / activity ---
-      const base = {
-        fromBlock: "0x0",
-        toBlock: "latest",
-        category: ["external"],
-        withMetadata: true,
-        excludeZeroValue: false,
-        maxCount: "0x64",
-        order: "desc"
-      };
-      const [outRes, inRes] = await Promise.all([
-        rpc("alchemy_getAssetTransfers", [{ ...base, fromAddress: addr }]).catch(() => ({ transfers: [] })),
-        rpc("alchemy_getAssetTransfers", [{ ...base, toAddress: addr }]).catch(() => ({ transfers: [] }))
-      ]);
-      const outs = outRes?.transfers || [];
-      const ins = inRes?.transfers || [];
-      const all = [...outs, ...ins];
-
-      const recentMs = t => (t?.metadata?.blockTimestamp ? Date.parse(t.metadata.blockTimestamp) : 0);
-      const latestTs = all.length ? Math.max(...all.map(recentMs)) : 0;
-      const firstTs = all.length ? Math.min(...all.map(recentMs)) : 0;
-      const daysSinceFirst = firstTs ? (Date.now() - firstTs) / 86400000 : null;
-      const daysSinceLatest = latestTs ? (Date.now() - latestTs) / 86400000 : null;
-
-      if (all.length === 0) {
-        addFinding("No history", "No transactions found on Sepolia.", "medium", 22);
-      } else {
-        if (daysSinceFirst < 1)
-          addFinding("New address", "First seen < 24h.", "high", 28);
-        else if (daysSinceFirst < 7)
-          addFinding("Newish address", "First seen < 7d.", "medium", 18);
-        else if (daysSinceFirst < 30)
-          addFinding("Recent address", "First seen < 30d.", "low", 8);
-
-        if (all.length < 5)
-          addFinding("Low activity", "Fewer than 5 total transfers.", "medium", 10);
-        if (outs.length === 0)
-          addFinding("Inbound only", "No outbound history.", "low", 6);
-
-        const uniqueRecipients = new Set(
-          outs.map(t => (t.to || "").toLowerCase()).filter(Boolean)
-        );
-        if (uniqueRecipients.size >= 10)
-          addFinding("Fan-out", `${uniqueRecipients.size} distinct recent recipients.`, "high", 18);
-
-        const senders = ins.map(t => (t.from || "").toLowerCase()).filter(Boolean);
-        const uniqueSenders = new Set(senders);
-        if (ins.length >= 5 && uniqueSenders.size >= 5 && outs.length === 0)
-          addFinding(
-            "Inbound burst",
-            "Many unique inbound senders, no outbound history.",
-            "medium",
-            10
-          );
-
-        const parseEth = v => (typeof v === "number" ? v : v ? Number(v) : 0);
-        const incomingValues = ins.map(t => parseEth(t.value)).filter(Number.isFinite);
-        if (incomingValues.length >= 3) {
-          incomingValues.sort((a, b) => a - b);
-          const mid = Math.floor(incomingValues.length / 2);
-          const median =
-            incomingValues.length % 2
-              ? incomingValues[mid]
-              : (incomingValues[mid - 1] + incomingValues[mid]) / 2;
-          if (median > 0 && median < DUST_THRESHOLD_ETH)
-            addFinding(
-              "Dusting",
-              `Median inbound < ${DUST_THRESHOLD_ETH} ETH.`,
-              "medium",
-              12
-            );
-        }
-
-        if (daysSinceLatest > 180)
-          addFinding("Dormant", "Last activity > 180 days ago. Slightly safer.", "low", -5);
-      }
-
-      // --- ENS negatives (if passed as ?ens=) ---
-      const ens = url.searchParams.get("ens") || "";
-      if (ens && BAD_ENS_NAMES.includes(ens.toLowerCase()))
-        addFinding("ENS flagged", `${ens} has negative reputation.`, "high", 20);
-
-      // --- clamp / output ---
-      score = Math.max(0, Math.min(100, score));
-      return json({ score, findings });
-    } catch (e) {
-      return json({ error: "worker_error", message: e.message }, 500);
+    // CORS preflight
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
-  }
+
+    if (url.pathname === "/health") {
+      return json({ ok: true, build: "safesend-cloudflare-v1.2" }, 200, origin);
+    }
+
+    if (url.pathname === "/check") {
+      return handleCheck(url, env, origin);
+    }
+
+    if (url.pathname === "/market/price") {
+      return handleMarketPrice(url, env, origin);
+    }
+
+    return new Response("Not Found", { status: 404, headers: corsHeaders(origin) });
+  },
 };
 
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
+// ---------- CORS / JSON ----------
+function corsHeaders(origin) {
+  // allow your app origins
+  const ALLOW = new Set([
+    "https://agethejedi.github.io",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+  ]);
+  const allowed = origin && ALLOW.has(origin);
+  return {
+    "Access-Control-Allow-Origin": allowed ? origin : "https://agethejedi.github.io",
+    "Vary": "Origin",
+    "Access-Control-Allow-Methods": "GET,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+  };
+}
+function json(data, status = 200, origin = "") {
+  return new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8" }
+    headers: { "content-type": "application/json", ...corsHeaders(origin) },
   });
+}
+
+// ---------- /market/price (CoinGecko Simple Price proxy) ----------
+async function handleMarketPrice(url, env, origin) {
+  // sanitize params
+  const idsRaw = (url.searchParams.get("ids") || "").trim();
+  const vs = (url.searchParams.get("vs") || "usd").trim().toLowerCase();
+
+  if (!idsRaw) return json({ error: "missing_ids" }, 400, origin);
+
+  // ensure comma-separated without spaces
+  const ids = idsRaw.split(",").map(s => s.trim()).filter(Boolean).join(",");
+
+  const cgURL = new URL("https://api.coingecko.com/api/v3/simple/price");
+  cgURL.searchParams.set("ids", ids);
+  cgURL.searchParams.set("vs_currencies", vs);
+  cgURL.searchParams.set("include_24hr_change", "true");
+
+  const headers = {};
+  // IMPORTANT: send both headers so demo OR pro keys work
+  if (env.COINGECKO_API_KEY) {
+    headers["x-cg-pro-api-key"] = env.COINGECKO_API_KEY;
+    headers["x-cg-demo-api-key"] = env.COINGECKO_API_KEY;
+  }
+
+  try {
+    const res = await fetch(cgURL.toString(), {
+      headers,
+      // cache at the edge to prevent 429s and smooth load
+      cf: { cacheTtl: 60, cacheEverything: true },
+    });
+
+    // pass through CG error details for easier debugging
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return json({ error: "coingecko_failed", status: res.status, body: text }, res.status, origin);
+    }
+
+    const data = await res.json();
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        ...corsHeaders(origin),
+        "Cache-Control": "public, max-age=60",
+      },
+    });
+  } catch (e) {
+    return json({ error: "coingecko_request_error", message: String(e) }, 500, origin);
+  }
+}
+
+// ---------- /check (SafeSend) ----------
+async function handleCheck(url, env, origin) {
+  const address = (url.searchParams.get("address") || "").toLowerCase();
+  const chain = (url.searchParams.get("chain") || "sepolia").toLowerCase();
+  if (!address.startsWith("0x")) return json({ error: "address required" }, 400, origin);
+
+  const HOSTS = {
+    sepolia: "api-sepolia.etherscan.io",
+    mainnet: "api.etherscan.io",
+    polygon: "api.polygonscan.com",
+  };
+  const host = HOSTS[chain] || HOSTS.sepolia;
+
+  const blocklist = new Set(["0x000000000000000000000000000000000000dead"]);
+  const allowlist = new Set();
+
+  if (blocklist.has(address)) return json({ score: 95, findings: ["Blocklist match"] }, 200, origin);
+  if (allowlist.has(address)) return json({ score: 5, findings: ["Allowlist"] }, 200, origin);
+
+  let score = 20;
+  const findings = [];
+
+  try {
+    const codeUrl = `https://${host}/api?module=proxy&action=eth_getCode&address=${address}&tag=latest&apikey=${env.ETHERSCAN_API_KEY||""}`;
+    const codeRes = await fetch(codeUrl);
+    const code = await codeRes.json();
+    if (code?.result && code.result !== "0x") { score += 30; findings.push("Address is a contract"); }
+  } catch { findings.push("Etherscan code check failed"); }
+
+  try {
+    const txUrl = `https://${host}/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=asc&apikey=${env.ETHERSCAN_API_KEY||""}`;
+    const txRes = await fetch(txUrl);
+    const txs = await txRes.json();
+    if (txs.status === "1") {
+      const list = txs.result || [];
+      if (list.length === 0) { score += 30; findings.push("No history"); }
+      else {
+        const first = list[0];
+        const ageSec = Date.now()/1000 - Number(first.timeStamp || 0);
+        if (ageSec < 48*3600) { score += 20; findings.push("Very new address"); }
+        else findings.push("Has history");
+      }
+    } else findings.push("Explorer returned no tx data");
+  } catch { findings.push("Etherscan tx fetch failed"); }
+
+  score = Math.max(0, Math.min(100, score));
+  return json({ score, findings }, 200, origin);
+}
+// ---- /account/txs ----
+if (url.pathname === "/account/txs") {
+  return handleAccountTxs(url, env, origin);
+}
+
+async function handleAccountTxs(url, env, origin) {
+  const address = url.searchParams.get("address") || "";
+  const chain = (url.searchParams.get("chain") || "sepolia").toLowerCase();
+  if (!address.startsWith("0x"))
+    return json({ error: "address required" }, 400, origin);
+
+  const HOSTS = {
+    sepolia: "api-sepolia.etherscan.io",
+    mainnet: "api.etherscan.io",
+    polygon: "api.polygonscan.com",
+  };
+  const host = HOSTS[chain] || HOSTS.sepolia;
+
+  const api = `https://${host}/api?module=account&action=txlist&address=${encodeURIComponent(
+    address
+  )}&startblock=0&endblock=99999999&sort=desc&apikey=${env.ETHERSCAN_API_KEY}`;
+
+  try {
+    const r = await fetch(api, { cf: { cacheTtl: 60, cacheEverything: true } });
+    const j = await r.json();
+    if (j.status !== "1" || !Array.isArray(j.result)) {
+      return json({ error: "etherscan_failed", j }, 502, origin);
+    }
+    const top10 = j.result.slice(0, 10);
+    return new Response(JSON.stringify({ txs: top10 }), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        ...corsHeaders(origin),
+        "Cache-Control": "public, max-age=60",
+      },
+    });
+  } catch (e) {
+    return json({ error: "tx_fetch_failed", message: e.message }, 500, origin);
+  }
 }
