@@ -1,5 +1,5 @@
 // =========================================
-// X-Wallet v1.4 — Control Center + TXs + SafeSend Worker-only risk
+/* X-Wallet v1.4 — Control Center + TXs + SafeSend Worker-only risk */
 // =========================================
 import { ethers } from "https://esm.sh/ethers@6.13.2";
 
@@ -349,7 +349,6 @@ async function fetchSafeSendWorker(addr){
     return await r.json(); // { score, decision, factors }
   }catch(e){
     console.warn("SafeSend fetch failed", e);
-    // Return a benign result so UI still works but WITHOUT any Etherscan text
     return { score: 10, decision: "allow", factors: [{severity:"low",label:"Risk service unavailable",reason:"Using default low risk."}] };
   }
 }
@@ -382,7 +381,7 @@ function openRiskModal({score, factors}, onCancel, onProceed){
   let cur = 0;
   bar.style.setProperty("--score", "0");
   scoreEl.textContent = `Risk score: ${cur}`;
-  modal.classList.add("show");
+  modal.classList.add("active"); // <-- FIX: use .active to match CSS
 
   const step = () => {
     cur = Math.min(cur + 2, target);
@@ -403,7 +402,7 @@ function openRiskModal({score, factors}, onCancel, onProceed){
   // wire buttons
   const off = () => {
     btnCancel.onclick = btnProceed.onclick = btnClose.onclick = agree.onchange = null;
-    modal.classList.remove("show");
+    modal.classList.remove("active"); // <-- FIX: remove .active
   };
 
   btnCancel.onclick = ()=>{ off(); onCancel?.(); };
