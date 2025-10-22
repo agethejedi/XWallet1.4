@@ -1,97 +1,188 @@
-/* === Base =========================================================== */
+/* ===== RiskXLabs Base (matches v1.4 aesthetic) ===== */
 :root{
-  --bg:#0c1117; --card:#121826; --text:#e6e7ea; --muted:#9aa4b2;
-  --border:#262f40; --accent:#06b6d4; --danger:#ef4444; --warn:#f59e0b; --ok:#10b981;
+  --bg: #071016;
+  --panel: #0c1820;
+  --panel-2: #0f1d27;
+  --text: #e7f7f2;
+  --muted: #8aa3a0;
+  --primary: #00eec3;
+  --accent: #12f0a7;
+  --danger: #ff3b3b;
+  --warning: #ffb020;
+  --good: #22d37b;
+  --link: #7ee3ff;
+  --shadow: rgba(0,0,0,0.5);
 }
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-a{color:#7dd3fc;text-decoration:none}a:hover{text-decoration:underline}
-.container{max-width:1100px;margin:0 auto;padding:24px}
 
-/* nav / hero / cards / sidebar -------------------------------------- */
-.nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.brand{font-weight:700;font-size:18px}.brand .x{color:#22d3ee;margin-right:6px}
-.cta .btn{margin-left:8px}
-.hero .lead{color:var(--muted);max-width:850px}
-.badge{display:inline-block;padding:6px 10px;background:#0b1220;border:1px solid var(--border);border-radius:999px;margin-right:8px;color:var(--muted)}
-
-.section-title{font-weight:700;margin:18px 0 10px}
-.app-grid{display:grid;grid-template-columns:260px 1fr;gap:16px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
-.sidebar .item{padding:12px;border-radius:10px;border:1px solid var(--border);margin-bottom:10px;cursor:pointer}
-.sidebar .item.active{background:linear-gradient(90deg,#0d1b2a,#0f2d2f);border-color:#143a40}
-.flex{display:flex;gap:8px;align-items:center}
-.sep{border:none;border-top:1px solid var(--border);margin:12px 0}
-.label{font-weight:700;margin-bottom:6px}
-.small{color:var(--muted);font-size:12px}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
-
-/* buttons / inputs --------------------------------------------------- */
-.btn{background:#0b1220;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;cursor:pointer}
-.btn:hover{border-color:#334155}
-.btn.primary{background:linear-gradient(90deg,#06b6d4,#22d3ee);color:#041019;border:0;font-weight:700}
-.btn.ghost{background:transparent;border:1px solid var(--border)}
-.icon-btn{background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:6px 8px;cursor:pointer}
-.icon-btn:hover{color:var(--text);border-color:#48556a}
-input,select,textarea{width:100%;background:#0b1220;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px}
-.table{width:100%;border-collapse:collapse}
-.table th,.table td{border-bottom:1px solid var(--border);padding:10px 6px;text-align:left}
-
-/* lock modal --------------------------------------------------------- */
-.lock{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;z-index:60}
-.lock.active{display:flex}
-.lock .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:420px;width:100%}
-
-/* === Risk Review modal ============================================= */
-.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0008;z-index:70}
-.modal.active{display:flex}
-.modal__panel{background:var(--card);border:1px solid var(--border);border-radius:14px;max-width:560px;width:100%;padding:18px}
-.modal__header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.modal__actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
-
-/* === FIXED: Risk Meter (visible, animated) ========================= */
-.risk-meter{margin:6px 0 10px}
-.risk-meter__scale{
-  position:relative;
-  height:18px;
-  border-radius:999px;
-  background:#0b1220;              /* solid dark track */
-  border:1px solid var(--border);
-  overflow:hidden;
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body{
+  margin: 0;
+  font: 16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
+  color: var(--text);
+  background: radial-gradient(1200px 1200px at 20% 0%, #0e2430 0%, var(--bg) 50%, #050b10 100%);
 }
-.risk-meter__bar{
-  position:absolute;
-  left:0;top:0;bottom:0;
-  width:calc(var(--score,0)*1%);
-  background:linear-gradient(90deg,
-    #10b981 0% 60%,
-    #f59e0b 60% 85%,
-    #ef4444 85% 100%);
-  border-radius:999px;
-  box-shadow:0 0 4px #000 inset;
-  transition:width .6s ease;
+
+/* Header (same layout style as 1.4) */
+.rl-header{
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 14px 18px;
+  background: linear-gradient(180deg, rgba(10,25,33,0.9), rgba(10,25,33,0.6) 70%, transparent);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  backdrop-filter: blur(6px);
 }
-.risk-meter__labels{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:6px}
-.risk-meter__score{margin-top:6px;font-weight:700}
+.brand{ display: flex; align-items: center; gap: 10px; }
+.brand-logo{ width: 34px; height: 34px; object-fit: contain; }
+.brand-title{
+  margin: 0; font-weight: 800; letter-spacing: 0.3px;
+  font-size: 1.25rem; color: var(--text);
+  text-shadow: 0 0 10px rgba(18,240,167,0.25);
+}
+.x-accent{ color: var(--accent); filter: drop-shadow(0 0 6px rgba(18,240,167,0.6)); }
 
-/* Factors ------------------------------------------------------------ */
-.risk-factors{display:grid;gap:8px;margin-top:10px}
-.factor{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);border-radius:10px;padding:8px}
-.factor__badge{font-size:12px;padding:4px 8px;border-radius:999px;color:#061416;font-weight:700}
-.factor--low  .factor__badge{background:var(--ok)}
-.factor--med  .factor__badge{background:var(--warn)}
-.factor--high .factor__badge{background:var(--danger)}
+.rl-nav{ display: flex; align-items: center; gap: 12px; }
+.nav-link{
+  color: var(--text); text-decoration: none; font-weight: 600;
+  padding: 8px 10px; border-radius: 8px; border: 1px solid transparent;
+}
+.nav-link:hover{ background: rgba(255,255,255,0.04); }
+.nav-link.active{ border-color: var(--primary); box-shadow: 0 0 8px rgba(0,238,195,0.25); }
+.nav-divider{ width: 1px; height: 28px; background: rgba(255,255,255,0.08); }
 
-/* Warning copy ------------------------------------------------------- */
-.risk-warning{border:1px solid #4c1d1d;background:#1b0b0b;border-radius:12px;padding:12px;margin-top:10px;color:#fca5a5}
-.checkbox{display:flex;align-items:center;gap:8px;margin-top:8px}
+/* Layout shells (preserve 1.4 spacing) */
+.container{ max-width: 1080px; margin: 26px auto; padding: 0 16px 80px; }
+.section-title{ margin: 0 0 12px; font-size: 1.05rem; color: var(--text); letter-spacing: .2px; }
 
-/* Risk chips on history items --------------------------------------- */
-.chip{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;border:1px solid var(--border);margin-left:6px}
-.chip.low{background:#072d26;color:#6ee7b7;border-color:#0f3d35}
-.chip.med{background:#3a2b08;color:#fde68a;border-color:#6b4d0e}
-.chip.high{background:#3b0a0a;color:#fca5a5;border-color:#7f1d1d}
+.panel{
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 10px 30px var(--shadow);
+  margin-bottom: 16px;
+}
 
-/* send form ---------------------------------------------------------- */
-.send-form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:center}
-@media (max-width:840px){.app-grid{grid-template-columns:1fr}.send-form{grid-template-columns:1fr}}
+/* Hero (kept simple) */
+.hero{ display: grid; grid-template-columns: 1.4fr .8fr; gap: 20px; align-items: center; }
+.hero-title{ margin: 0 0 8px; font-size: 1.6rem; }
+.hero-subtitle{ margin: 0 0 8px; color: var(--muted); }
+.hero-points{ margin: 8px 0 0 18px; color: var(--text); }
+.hero-cta{ display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.cta-hint{ margin: 0; color: var(--muted); font-size: .9rem; }
+
+/* Buttons (consistent with 1.4) */
+.btn{
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04); color: var(--text); font-weight: 700;
+  cursor: pointer; transition: transform .05s, box-shadow .15s, border-color .15s;
+}
+.btn:hover{ box-shadow: 0 0 10px rgba(255,255,255,0.1); }
+.btn:active{ transform: translateY(1px); }
+.btn-primary{
+  background: linear-gradient(180deg, #0ef0a7 0%, #00eec3 60%, #0bd7c0 100%);
+  color: #041213; border-color: transparent;
+  box-shadow: 0 8px 24px rgba(0,238,195,0.28);
+}
+
+/* Pills (legacy style) */
+.pill{
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02); color: var(--text); font-weight: 600;
+}
+.pill-good{ background: rgba(34,211,123,0.08); border-color: rgba(34,211,123,0.25); color: #c9ffe4; }
+
+/* Footer (unchanged) */
+.rl-footer{
+  position: sticky; bottom: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 18px; border-top: 1px solid rgba(255,255,255,0.06);
+  background: linear-gradient(0deg, rgba(10,25,33,0.9), rgba(10,25,33,0.6) 70%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+/* ===== === v1.5 add-ons (namespaced; won’t disturb 1.4) === ===== */
+:root{
+  --v15-primary: #00eec3;
+  --v15-muted: #8aa3a0;
+  --v15-bg-1: rgba(255,255,255,0.02);
+  --v15-border: rgba(255,255,255,0.08);
+  --v15-glow: rgba(0, 238, 195, 0.28);
+}
+
+/* Card wrapper that blends with 1.4 panels */
+.v15-card{
+  background: var(--v15-bg-1);
+  border: 1px solid var(--v15-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+/* Pills for network selection */
+.v15-net-pills{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+.v15-pill{
+  appearance:none; border:1px solid var(--v15-border);
+  background: rgba(255,255,255,0.03);
+  color: inherit; font-weight: 600;
+  padding: 6px 10px; border-radius: 999px; cursor:pointer;
+  transition: box-shadow .15s, border-color .15s, transform .05s;
+}
+.v15-pill:hover{ border-color: rgba(255,255,255,0.16); box-shadow: 0 0 10px var(--v15-glow); }
+.v15-pill.v15-on{
+  border-color: var(--v15-primary);
+  box-shadow: 0 0 12px var(--v15-glow), inset 0 0 0 1px rgba(0,238,195,0.25);
+}
+
+/* Bulk actions */
+.v15-net-bulk{ display:flex; gap:8px; margin: 4px 0 8px; }
+.v15-btn{
+  appearance:none; border:1px solid var(--v15-border); background:transparent; color:inherit;
+  font-weight:600; padding:6px 10px; border-radius:8px; cursor:pointer;
+}
+.v15-btn:hover{ box-shadow: 0 0 8px rgba(255,255,255,0.08); }
+.v15-btn-ghost{}
+
+/* Fallback multi-select */
+.v15-select-label{ display:block; margin: 6px 0 6px; opacity:.9; }
+.v15-network-select{
+  width:100%; max-width:560px;
+  background: rgba(0,0,0,.35); color: inherit;
+  border: 1px solid var(--v15-primary); border-radius: 8px; padding: 6px 8px;
+  box-shadow: 0 0 10px var(--v15-glow);
+}
+.v15-network-select:focus{ outline:none; box-shadow: 0 0 16px var(--v15-glow); }
+.v15-muted{ color: var(--v15-muted); font-size:.9rem; }
+
+/* Risk bullets */
+.v15-risk-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.v15-risk-item{
+  display:grid; grid-template-columns: 14px 1fr; gap: 10px;
+  padding: 10px; border: 1px solid var(--v15-border); border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+}
+.v15-risk-name{ font-weight: 700; }
+.v15-risk-note{ color: var(--muted); font-size: .95rem; }
+.v15-risk-dot{ width: 10px; height: 10px; border-radius: 999px; margin-top: 4px; box-shadow: 0 0 10px rgba(255,255,255,0.15); }
+.v15-risk-dot.dot-hard{ background: var(--danger); box-shadow: 0 0 10px rgba(255,59,59,0.6); }
+.v15-risk-dot.dot-high{ background: var(--warning); box-shadow: 0 0 10px rgba(255,176,32,0.6); }
+.v15-risk-dot.dot-med{ background: #ffda5b; box-shadow: 0 0 10px rgba(255,218,91,0.5); }
+.v15-risk-dot.dot-info{ background: var(--primary); box-shadow: 0 0 10px rgba(0,238,195,0.25); }
+
+/* Version tag in footer */
+.v15-version{
+  color: var(--muted); font-size: .9rem;
+  border: 1px dashed rgba(255,255,255,0.12);
+  padding: 4px 8px; border-radius: 8px;
+}
+
+/* Responsiveness (same as 1.4 feel) */
+@media (max-width: 940px){
+  .hero{ grid-template-columns: 1fr; }
+}
+@media (max-width: 640px){
+  .rl-nav{ gap: 6px; }
+  .brand-title{ font-size: 1.05rem; }
+  .v15-risk-grid{ grid-template-columns: 1fr; }
+}
