@@ -3,138 +3,209 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>X-Wallet by RiskXLabs — Web v1.3</title>
-
-  <!-- CSP: allow esm.sh (modules), your RPC/Worker, and Etherscan Sepolia for history -->
-  <meta http-equiv="Content-Security-Policy"
-        content="
-          default-src 'self';
-          script-src 'self' https://esm.sh;
-          connect-src 'self'
-                       https://eth-sepolia.g.alchemy.com
-                       https://xwalletv1dot2.agedotcom.workers.dev
-                       https://api-sepolia.etherscan.io;
-          style-src 'self' 'unsafe-inline';
-          img-src 'self' data:;
-          font-src 'self' data:;
-          base-uri 'self';
-          frame-ancestors 'none';
-        ">
-
+  <title>X-Wallet — RiskXLabs (v1.5)</title>
+  <meta name="theme-color" content="#071016" />
+  <!-- Adjust this path if your css is elsewhere, e.g. xwallet1_5/css/styles.css -->
   <link rel="stylesheet" href="css/styles.css" />
+  <link rel="icon" href="assets/favicon.png" />
 </head>
+
 <body>
-  <div class="container">
-    <!-- Top nav / brand -->
-    <div class="nav">
-      <div class="brand">
-        <span class="x">X</span> X-Wallet <span class="small">by RiskXLabs</span>
-      </div>
-      <div class="cta">
-        <button class="btn ghost" id="ctaLearn">Learn more</button>
-        <button class="btn primary" id="ctaApp">Open App</button>
-      </div>
+  <!-- ===== Header (unchanged layout style) ===== -->
+  <header class="rl-header">
+    <div class="brand">
+      <img src="assets/riskxlabs-shieldflask.png" class="brand-logo" alt="RiskXLabs" />
+      <h1 class="brand-title">Risk<span class="x-accent">X</span>Labs</h1>
     </div>
 
-    <!-- Hero -->
-    <section class="hero">
-      <div>
-        <h1>SafeSend™ risk checks. Control Center. Multi-wallet. On-chain sends (Sepolia).</h1>
-        <p class="lead">
-          Create or import a wallet, unlock with a password, manage multiple derived wallets,
-          view balances & recent activity, and send ETH on Sepolia with SafeSend pre-checks.
+    <nav class="rl-nav">
+      <a class="nav-link active" href="index.html">Home</a>
+      <a class="nav-link" href="dashboard.html">Dashboard</a>
+      <a class="nav-link" href="safesend.html">SafeSend</a>
+      <span class="nav-divider" aria-hidden="true"></span>
+      <a class="nav-link" href="examiner.html">Examiner / Eagle Eye</a>
+      <a class="nav-link" href="wallet.html">X-Wallet</a>
+      <a class="nav-link" href="settings.html">Settings</a>
+    </nav>
+  </header>
+
+  <!-- ===== Main container (kept same spacing as 1.4) ===== -->
+  <main class="container">
+    <!-- Top hero/panel area (unchanged structure) -->
+    <section class="panel hero">
+      <div class="hero-copy">
+        <h2 class="hero-title">X-Wallet <span class="pill pill-good">v1.5</span></h2>
+        <p class="hero-subtitle">
+          Non-custodial. Multi-chain. Built to <strong>block fraud</strong> before it happens.
         </p>
-        <div class="flex">
-          <span class="badge">Sepolia testnet</span>
-          <span class="badge">Control Center</span>
-          <span class="badge">SafeSend checks</span>
-        </div>
+        <ul class="hero-points">
+          <li>Multi-chain selection (Ethereum, Base, Polygon, Sepolia, etc.)</li>
+          <li>Risk model adds: OFAC hard-block, Scam clusters ≥60, Phishing clusters</li>
+          <li>Seamless hand-off to <code>app.js</code>/<code>worker.js</code> via <code>localStorage</code></li>
+        </ul>
+      </div>
+
+      <div class="hero-cta">
+        <!-- Keep the same ID your v1.4 used so any existing JS continues to work -->
+        <button id="enterBtn" class="btn btn-primary" data-role="enter-wallet">Enter X-Wallet</button>
+        <p class="cta-hint">Your selected networks are saved for the app & worker.</p>
       </div>
     </section>
 
-    <!-- App shell -->
-    <section class="app">
-      <div class="section-title">X-Wallet (Web)</div>
-      <div class="app-grid">
-        <!-- Sidebar -->
-        <div class="card sidebar">
-          <div class="label">Navigation</div>
-          <div class="item active" data-view="dashboard">Control Center</div>
-          <div class="item" data-view="wallets">Wallets</div>
-          <div class="item" data-view="send">Send</div>
-          <!-- Messaging can be added back later -->
-          <!-- <div class="item" data-view="messaging">Messaging</div> -->
-          <div class="item" data-view="settings">Settings</div>
-          <hr class="sep" />
-          <div class="flex">
-            <div id="lockState" class="badge">Locked</div>
-            <button class="btn" id="btnLock">Lock</button>
-            <button class="btn" id="btnUnlock">Unlock</button>
+    <!-- ===== v1.5 add-on: Multi-Chain Selector (namespaced; won’t move layout) ===== -->
+    <section class="panel v15-card">
+      <h3 class="section-title">Networks</h3>
+
+      <!-- Quick-pick pills (toggle on/off) -->
+      <div class="v15-net-pills" id="v15NetPills" role="group" aria-label="Network select">
+        <button class="v15-pill v15-pill-select v15-on" data-id="ethereum" aria-pressed="true">Ethereum</button>
+        <button class="v15-pill v15-pill-select v15-on" data-id="base" aria-pressed="true">Base</button>
+        <button class="v15-pill v15-pill-select v15-on" data-id="polygon" aria-pressed="true">Polygon</button>
+        <button class="v15-pill v15-pill-select v15-on" data-id="sepolia" aria-pressed="true">Sepolia</button>
+        <button class="v15-pill v15-pill-select" data-id="arbitrum" aria-pressed="false">Arbitrum</button>
+        <button class="v15-pill v15-pill-select" data-id="optimism" aria-pressed="false">Optimism</button>
+      </div>
+
+      <div class="v15-net-bulk">
+        <button id="v15SelectAll" class="v15-btn v15-btn-ghost">Select All</button>
+        <button id="v15SelectNone" class="v15-btn v15-btn-ghost">Clear</button>
+      </div>
+
+      <!-- Compact fallback multi-select (doesn’t change surrounding layout) -->
+      <label class="v15-select-label" for="v15NetworkSelect">Or choose from list</label>
+      <select class="v15-network-select" id="v15NetworkSelect" multiple size="6" aria-describedby="v15NetHelp">
+        <option value="ethereum" selected>Ethereum</option>
+        <option value="base" selected>Base</option>
+        <option value="polygon" selected>Polygon</option>
+        <option value="sepolia" selected>Sepolia</option>
+        <option value="arbitrum">Arbitrum</option>
+        <option value="optimism">Optimism</option>
+      </select>
+      <p id="v15NetHelp" class="v15-muted">Tip: hold Ctrl/Cmd to select multiple.</p>
+    </section>
+
+    <!-- ===== v1.5 add-on: Risk bullets (informational, no layout dependence) ===== -->
+    <section class="panel v15-card">
+      <h3 class="section-title">Risk Assessment (active in 1.5)</h3>
+      <div class="v15-risk-grid">
+        <div class="v15-risk-item">
+          <span class="v15-risk-dot dot-hard"></span>
+          <div>
+            <div class="v15-risk-name">OFAC Sanctions</div>
+            <div class="v15-risk-note">Hard-block — transfers to listed addresses are prevented.</div>
           </div>
         </div>
-
-        <!-- Main view container -->
-        <div class="card" id="view"><!-- app.js renders here --></div>
+        <div class="v15-risk-item">
+          <span class="v15-risk-dot dot-high"></span>
+          <div>
+            <div class="v15-risk-name">Scam Clusters</div>
+            <div class="v15-risk-note">Presence sets ≥ <strong>60</strong> for that factor alone.</div>
+          </div>
+        </div>
+        <div class="v15-risk-item">
+          <span class="v15-risk-dot dot-med"></span>
+          <div>
+            <div class="v15-risk-name">Phishing Clusters</div>
+            <div class="v15-risk-note">Known phishing campaigns & look-alike routes.</div>
+          </div>
+        </div>
+        <div class="v15-risk-item">
+          <span class="v15-risk-dot dot-info"></span>
+          <div>
+            <div class="v15-risk-name">Heuristics</div>
+            <div class="v15-risk-note">Fan-in/out, mixers, age of address, risk halos, etc.</div>
+          </div>
+        </div>
       </div>
     </section>
+  </main>
 
-    <footer class="footer">© RiskXLabs — X-Wallet Web v1.3</footer>
-  </div>
+  <!-- ===== Footer (unchanged layout style) ===== -->
+  <footer class="rl-footer">
+    <span>© <span id="year"></span> RiskXLabs</span>
+    <span class="v15-version" aria-label="version">X-Wallet v1.5</span>
+  </footer>
 
-  <!-- Lock modal -->
-  <div class="lock" id="lockModal">
-    <div class="panel">
-      <div class="label">Unlock your wallet</div>
-      <div class="small">Your secret phrase is encrypted locally. Enter your password to unlock.</div>
-      <div style="height:8px"></div>
-      <input id="unlockPassword" type="password" placeholder="Password" />
-      <div style="height:8px"></div>
-      <div class="flex">
-        <button class="btn" id="doUnlock">Unlock</button>
-        <button class="btn ghost" id="cancelUnlock">Cancel</button>
-      </div>
-      <div class="small" id="unlockMsg"></div>
-    </div>
-  </div>
+  <!-- ===== v1.5 bootstrap (namespaced; doesn’t change your 1.4 routing) ===== -->
+  <script>
+    (function () {
+      const VERSION = "1.5.0";
+      const STORAGE_KEY = "xw.selectedNetworks";
+      const SUPPORTED = ["ethereum","base","polygon","sepolia","arbitrum","optimism"];
 
-  <!-- App script (ESM) -->
-  <script type="module" src="js/app.js"></script>
-  <!-- Risk Review Modal (SafeSend) -->
-<div id="riskModal" class="modal" aria-hidden="true">
-  <div class="modal__panel">
-    <div class="modal__header">
-      <div class="label">SafeSend risk review</div>
-      <button id="riskClose" class="icon-btn" aria-label="Close">✕</button>
-    </div>
+      const q = s => document.querySelector(s);
+      const qa = s => Array.from(document.querySelectorAll(s));
 
-    <!-- Meter -->
-    <div class="risk-meter">
-      <div id="riskMeter" class="risk-meter__scale">
-        <div id="riskMeterBar" class="risk-meter__bar" style="--score:0"></div>
-      </div>
-      <div class="risk-meter__labels"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
-      <div id="riskScoreText" class="risk-meter__score">Risk score: 0</div>
-    </div>
+      const pills   = qa(".v15-pill-select");
+      const select  = q("#v15NetworkSelect");
+      const btnAll  = q("#v15SelectAll");
+      const btnNone = q("#v15SelectNone");
+      const yearEl  = q("#year");
+      if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-    <!-- Factors -->
-    <div id="riskFactors" class="risk-factors small">
-      <!-- JS populates rows like:
-      <div class="factor factor--high"><span class="factor__badge">High</span><div>…reason…</div></div>
-      -->
-    </div>
+      // Keep version for diagnostics
+      localStorage.setItem("xw.version", VERSION);
 
-    <!-- High-risk acknowledgement -->
-    <div id="riskWarning" class="risk-warning" style="display:none">
-      This transaction has been identified by SafeSend as one involving substantial risk of being a scam or fraud.
-      The submitter understands that this is an attempt at intervention using the best available information.
-      The submitter assumes full financial responsibility for ignoring the stated risk factors.
-      <label class="checkbox"><input id="riskAgree" type="checkbox"> <span>I agree</span></label>
-    </div>
+      function currentFromPills() {
+        return pills
+          .filter(p => p.classList.contains("v15-on"))
+          .map(p => p.dataset.id)
+          .filter(id => SUPPORTED.includes(id));
+      }
+      function syncSelectFromPills() {
+        const chosen = new Set(currentFromPills());
+        Array.from(select.options).forEach(o => { o.selected = chosen.has(o.value); });
+      }
 
-    <div class="modal__actions">
-      <button id="riskCancel" class="btn ghost">Cancel</button>
-      <button id="riskProceed" class="btn primary" disabled>Complete transaction</button>
-    </div>
-  </div>
-</div>
+      pills.forEach(p => {
+        p.addEventListener("click", () => {
+          p.classList.toggle("v15-on");
+          p.setAttribute("aria-pressed", p.classList.contains("v15-on") ? "true" : "false");
+          syncSelectFromPills();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(currentFromPills()));
+        });
+      });
+      if (btnAll) btnAll.addEventListener("click", () => {
+        pills.forEach(p => p.classList.add("v15-on"));
+        syncSelectFromPills();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(currentFromPills()));
+      });
+      if (btnNone) btnNone.addEventListener("click", () => {
+        pills.forEach(p => p.classList.remove("v15-on"));
+        syncSelectFromPills();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(currentFromPills()));
+      });
+
+      if (select) select.addEventListener("change", () => {
+        const chosen = new Set(Array.from(select.selectedOptions).map(o => o.value));
+        pills.forEach(p => {
+          const on = chosen.has(p.dataset.id);
+          p.classList.toggle("v15-on", on);
+          p.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(chosen)));
+      });
+
+      // If your v1.4 already wires #enterBtn, we just ensure nets are saved before it runs
+      const enter = document.getElementById("enterBtn") || document.querySelector('[data-role="enter-wallet"]');
+      if (enter) {
+        enter.addEventListener("click", () => {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(currentFromPills()));
+        }, { capture: true });
+      }
+
+      // Restore prior selection (if any)
+      try {
+        const prev = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        if (prev.length) {
+          pills.forEach(p => p.classList.toggle("v15-on", prev.includes(p.dataset.id)));
+          syncSelectFromPills();
+        }
+      } catch (_) {}
+    })();
+  </script>
+
+  <!-- Adjust this path if your bundle is elsewhere, e.g. xwallet1_5/app.js -->
+  <script src="app.js" defer></script>
 </body>
+</html>
